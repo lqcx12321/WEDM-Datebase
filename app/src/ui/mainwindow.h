@@ -9,6 +9,10 @@
 #include <QComboBox>
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QtCharts/QChartView>
+#include <QtCharts/QScatterSeries>
+
+using namespace QtCharts;
 
 #include "../dao/db.h"
 #include "../service/selectionservice.h"
@@ -38,12 +42,17 @@ private:
     QGroupBox* createPlotGroup();
     QGroupBox* createTableGroup();
 
+    QChartView *chartView;
+
     // 表格填充
     void populateTable(const QList<CandidateRow>& rows);
 
     void resetFilters();
 
     void exportCSV();
+
+    void updatePlot();
+
 
 
 private:

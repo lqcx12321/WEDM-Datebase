@@ -161,11 +161,16 @@ QGroupBox* MainWindow::createPlotGroup()
     QGroupBox *g = new QGroupBox("可视化（默认 Ra vs ON）");
     QVBoxLayout *v = new QVBoxLayout(g);
 
+    chartView = new QChartView(new QChart());
+
     plot_select = new QComboBox();
     plot_select->addItems({"Ra vs ON1","CutSpeed vs IPM","Ra vs WS","CutSpeed vs WS","LAG vs CUTSPEED"});
 
+    chartView = new QChartView(new QChart());
+    chartView->setRenderHint(QPainter::Antialiasing);
+
     v->addWidget(plot_select);
-    v->addStretch();
+    v->addWidget(chartView);
 
     return g;
 }
@@ -199,6 +204,11 @@ void MainWindow::connectSignals()
     connect (btn_reset, &QPushButton::clicked, this, &MainWindow::resetFilters);
     
     connect (btn_export, &QPushButton::clicked, this, &MainWindow::exportCSV);
+
+    connect(plot_select, &QComboBox::currentTextChanged, this, [=](){
+        updatePlot();
+    });
+
 }
 
 // 填充表格
@@ -291,6 +301,47 @@ void MainWindow::exportCSV()
     qDebug() << "CSV 导出成功:" << fileName;
 }
 
+void MainWindow::updatePlot()
+{
+    if (table->rowCount() == 0)
+        return;
+
+    QChart *chart = new QChart();
+
+    QScatterSeries *series = new QScatterSeries();
+    series->setMarkerSize(7);
+
+    QString type = plot_select->currentText();
+
+    int x_col = 2; // ON1
+    int y_col = 9; // RA
+
+    if (type == "Ra vs ON1") {
+        x_col = 2;  // ON1
+        y_col = 9;  // RA
+    }
+    else if (type == "CutSpeed vs IPM") {
+        x_col = 4;  // IPM
+        y_col = 1;  // speed (需要修改，暂用占位)
+    }
+    else if (type == "Ra vs WS") {
+        x_col = 7; 
+        y_col = 9;
+    }
+    // 可继续按需求扩展…
+
+    for (int r = 0; r < table->rowCount(); ++r) {
+        double x = table->item(r, x_col)->text().toDouble();
+        double y = table->item(r, y_col)->text().toDouble();
+        series->append(x, y);
+    }
+
+    chart->addSeries(series);
+    chart->createDefaultAxes();
+    chart->setTitle(type);
+
+    chartView->setChart(chart);
+}
 
 
 

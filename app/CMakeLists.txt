@@ -11,7 +11,7 @@ set(CMAKE_AUTORCC ON)
 # -------------------------------------------------------
 # 查找 Qt5 模块
 # -------------------------------------------------------
-find_package(Qt5 COMPONENTS Widgets Sql REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Sql Charts)
 
 # -------------------------------------------------------
 # 添加源文件
@@ -44,6 +44,7 @@ target_include_directories(wedm_app PRIVATE
 
 target_link_libraries(wedm_app PRIVATE
     Qt5::Widgets
+    Qt5::Charts
     Qt5::Sql
     dataprocess
     recommend
