@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -shared -Wl,-soname,libdataprocess.so -o libdataprocess.so CMakeFiles/dataprocess.dir/dataprocess.cpp.o CMakeFiles/dataprocess.dir/dataprocess_c_api.cpp.o 
