@@ -1,0 +1,459 @@
+# Project: wedm_recommender
+# Description: Qt5 C++ project skeleton with SQLite DAO, Service layer, and two .so modules (dataprocess + recommend).
+# File format: each file is separated by a header line: === path ===
+
+=== CMakeLists.txt ===
+cmake_minimum_required(VERSION 3.10)
+project(wedm_recommender)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+find_package(Qt5 COMPONENTS Widgets Sql REQUIRED)
+
+add_subdirectory(app)
+add_subdirectory(modules/dataprocess)
+add_subdirectory(modules/recommend)
+
+=== app/CMakeLists.txt ===
+cmake_minimum_required(VERSION 3.10)
+project(app)
+
+set(SOURCES
+    main.cpp
+    src/ui/mainwindow.cpp
+    src/dao/db.cpp
+    src/service/selectionservice.cpp
+)
+set(HEADERS
+    src/ui/mainwindow.h
+    src/dao/db.h
+    src/service/selectionservice.h
+    src/model/types.h
+)
+
+qt5_add_resources(RESOURCES )
+
+add_executable(wedm_app ${SOURCES} ${HEADERS} ${RESOURCES})
+
+target_include_directories(wedm_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+target_link_libraries(wedm_app PRIVATE Qt5::Widgets Qt5::Sql dataprocess recommend)
+
+=== modules/dataprocess/CMakeLists.txt ===
+cmake_minimum_required(VERSION 3.10)
+project(dataprocess)
+
+add_library(dataprocess SHARED dataprocess.cpp dataprocess_c_api.cpp)
+target_include_directories(dataprocess PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+=== modules/recommend/CMakeLists.txt ===
+cmake_minimum_required(VERSION 3.10)
+project(recommend)
+
+add_library(recommend SHARED recommend.cpp recommend_c_api.cpp)
+target_include_directories(recommend PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+=== app/src/model/types.h ===
+#ifndef TYPES_H
+#define TYPES_H
+
+#include <QString>
+#include <QVariantMap>
+
+struct CandidateRow {
+    int id;
+    QString code;
+    QVariantMap fields; // flexible container
+};
+
+#endif // TYPES_H
+
+=== app/src/dao/db.h ===
+#ifndef DB_H
+#define DB_H
+
+#include <QString>
+#include <QSqlDatabase>
+#include <QList>
+#include "../model/types.h"
+
+class DB {
+public:
+    DB(const QString &path);
+    ~DB();
+    bool init(bool withDemo=true);
+    QList<CandidateRow> queryAll();
+    bool updateRemark(int id, const QString &remark);
+    QSqlDatabase& connection();
+private:
+    QSqlDatabase m_db;
+};
+
+#endif // DB_H
+
+=== app/src/dao/db.cpp ===
+#include "db.h"
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QVariant>
+#include <QDebug>
+
+static const char *DDL = R"(
+CREATE TABLE IF NOT EXISTS CuttingProcessData (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CODE TEXT,
+    ON1 REAL,
+    OFF1 REAL,
+    IPM REAL,
+    HP REAL,
+    MA REAL,
+    SV REAL,
+    V REAL,
+    SF REAL,
+    WS REAL,
+    WT REAL,
+    W_MATERIAL TEXT,
+    W_THICK REAL,
+    D_DIAMETER REAL,
+    D_MATERIAL TEXT,
+    GAP REAL,
+    CUTSPEED REAL,
+    RA REAL,
+    LAG REAL,
+    remark TEXT
+);
+)";
+
+DB::DB(const QString &path) {
+    m_db = QSqlDatabase::addDatabase("QSQLITE", "wedm_conn");
+    m_db.setDatabaseName(path);
+}
+
+DB::~DB() {
+    QString connName = m_db.connectionName();
+    m_db.close();
+    QSqlDatabase::removeDatabase(connName);
+}
+
+bool DB::init(bool withDemo) {
+    if (!m_db.open()) {
+        qWarning() << "Open DB failed:" << m_db.lastError().text();
+        return false;
+    }
+    QSqlQuery q(m_db);
+    if (!q.exec(DDL)) {
+        qWarning() << "DDL failed:" << q.lastError().text();
+        return false;
+    }
+    // insert demo rows if empty
+    if (!q.exec("SELECT COUNT(*) FROM CuttingProcessData")) return true;
+    if (q.next()) {
+        int c = q.value(0).toInt();
+        if (c == 0 && withDemo) {
+            QSqlQuery ins(m_db);
+            ins.prepare("INSERT INTO CuttingProcessData (CODE,ON1,OFF1,IPM,HP,MA,SV,V,SF,WS,WT,W_MATERIAL,W_THICK,D_DIAMETER,D_MATERIAL,GAP,CUTSPEED,RA,LAG,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            ins.addBindValue("A01"); ins.addBindValue(1.2); ins.addBindValue(8.0); ins.addBindValue(8.0); ins.addBindValue(2); ins.addBindValue(0); ins.addBindValue(50); ins.addBindValue(80); ins.addBindValue(20); ins.addBindValue(3.0); ins.addBindValue(1200);
+            ins.addBindValue("SKD11"); ins.addBindValue(20.0); ins.addBindValue(0.18); ins.addBindValue("黄铜"); ins.addBindValue(0.010); ins.addBindValue(120.0); ins.addBindValue(0.0008); ins.addBindValue(0.030); ins.addBindValue("demo");
+            ins.exec();
+            // add a couple more demo rows if needed (omitted for brevity)
+        }
+    }
+    return true;
+}
+
+QList<CandidateRow> DB::queryAll() {
+    QList<CandidateRow> out;
+    QSqlQuery q(m_db);
+    if (!q.exec("SELECT * FROM CuttingProcessData")) return out;
+    while (q.next()) {
+        CandidateRow r;
+        r.id = q.value("id").toInt();
+        r.code = q.value("CODE").toString();
+        // store a few fields
+        r.fields["CUTSPEED"] = q.value("CUTSPEED");
+        r.fields["RA"] = q.value("RA");
+        r.fields["LAG"] = q.value("LAG");
+        r.fields["GAP"] = q.value("GAP");
+        out.append(r);
+    }
+    return out;
+}
+
+bool DB::updateRemark(int id, const QString &remark) {
+    QSqlQuery q(m_db);
+    q.prepare("UPDATE CuttingProcessData SET remark = :r WHERE id = :i");
+    q.bindValue(":r", remark);
+    q.bindValue(":i", id);
+    return q.exec();
+}
+
+QSqlDatabase& DB::connection() { return m_db; }
+
+=== app/src/service/selectionservice.h ===
+#ifndef SELECTIONSERVICE_H
+#define SELECTIONSERVICE_H
+
+#include "../dao/db.h"
+#include <QList>
+#include <QString>
+#include "../model/types.h"
+
+class SelectionService {
+public:
+    SelectionService(DB *db);
+    QList<CandidateRow> rankedCandidates(double w_speed, double w_ra, double w_lag, double w_gap, double target_gap);
+private:
+    DB *m_db;
+};
+
+#endif // SELECTIONSERVICE_H
+
+=== app/src/service/selectionservice.cpp ===
+#include "selectionservice.h"
+#include <algorithm>
+
+SelectionService::SelectionService(DB *db): m_db(db) {}
+
+QList<CandidateRow> SelectionService::rankedCandidates(double w_speed, double w_ra, double w_lag, double w_gap, double target_gap) {
+    auto rows = m_db->queryAll();
+    // simple scoring example using fields stored
+    struct ScoreItem { CandidateRow r; double score; };
+    QVector<ScoreItem> scores;
+    double sp_lo=1e9, sp_hi=0, ra_lo=1e9, ra_hi=0, lg_lo=1e9, lg_hi=0;
+    for (auto &r: rows) {
+        double s = r.fields.value("CUTSPEED", 0.0).toDouble();
+        double ra = r.fields.value("RA", 0.0).toDouble();
+        double lg = r.fields.value("LAG", 0.0).toDouble();
+        sp_lo = std::min(sp_lo, s); sp_hi = std::max(sp_hi, s);
+        ra_lo = std::min(ra_lo, ra); ra_hi = std::max(ra_hi, ra);
+        lg_lo = std::min(lg_lo, lg); lg_hi = std::max(lg_hi, lg);
+    }
+    for (auto &r: rows) {
+        double s = r.fields.value("CUTSPEED", 0.0).toDouble();
+        double ra = r.fields.value("RA", 0.0).toDouble();
+        double lg = r.fields.value("LAG", 0.0).toDouble();
+        auto norm_pos = [](double x,double lo,double hi){ if (hi==lo) return 1.0; return (x-lo)/(hi-lo); };
+        auto norm_neg = [](double x,double lo,double hi){ if (hi==lo) return 1.0; return 1.0-(x-lo)/(hi-lo); };
+        double sc = 0.0;
+        sc += norm_pos(s, sp_lo, sp_hi) * w_speed;
+        sc += norm_neg(ra, ra_lo, ra_hi) * w_ra;
+        sc += norm_neg(lg, lg_lo, lg_hi) * w_lag;
+        if (target_gap>0) {
+            double gap = r.fields.value("GAP", 0.0).toDouble();
+            double rel = std::abs(gap - target_gap) / std::max(target_gap, 1e-9);
+            sc += std::max(0.0, 1.0 - rel) * w_gap;
+        }
+        scores.append({r, sc});
+    }
+    std::sort(scores.begin(), scores.end(), [](const ScoreItem&a,const ScoreItem&b){ return a.score>b.score;});
+    QList<CandidateRow> out;
+    for (auto &it: scores) out.append(it.r);
+    return out;
+}
+
+=== app/src/ui/mainwindow.h ===
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QMainWindow>
+#include <QSplitter>
+#include <QTableWidget>
+#include "../dao/db.h"
+#include "../service/selectionservice.h"
+
+class MainWindow : public QMainWindow {
+    Q_OBJECT
+public:
+    explicit MainWindow(QWidget *parent = nullptr);
+private:
+    void buildUI();
+    void populateTable(const QList<CandidateRow>& rows);
+
+    DB *m_db;
+    SelectionService *m_service;
+
+    // UI widgets (only a subset)
+    QTableWidget *table;
+    QComboBox *plot_select;
+    QPushButton *btn_query;
+};
+
+#endif // MAINWINDOW_H
+
+=== app/src/ui/mainwindow.cpp ===
+#include "mainwindow.h"
+#include <QVBoxLayout>
+#include <QSplitter>
+#include <QGroupBox>
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QDoubleSpinBox>
+#include <QPushButton>
+#include <QLabel>
+#include <QComboBox>
+#include <QDebug>
+
+MainWindow::MainWindow(QWidget *parent): QMainWindow(parent) {
+    setWindowTitle("WEDM 智能化数据库 GUI");
+    resize(1200,720);
+    m_db = new DB("wedm.db");
+    m_db->init(true);
+    m_service = new SelectionService(m_db);
+    buildUI();
+}
+
+void MainWindow::buildUI() {
+    QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+    QWidget *left = new QWidget(); QWidget *right = new QWidget();
+    splitter->addWidget(left); splitter->addWidget(right); splitter->setStretchFactor(1,1);
+    QVBoxLayout *l_layout = new QVBoxLayout(left);
+    QGroupBox *g_params = new QGroupBox("查询");
+    QFormLayout *f = new QFormLayout(g_params);
+    QDoubleSpinBox *w_speed = new QDoubleSpinBox(); w_speed->setRange(0,1); w_speed->setValue(0.55);
+    QDoubleSpinBox *w_ra = new QDoubleSpinBox(); w_ra->setRange(0,1); w_ra->setValue(0.30);
+    QDoubleSpinBox *w_lag = new QDoubleSpinBox(); w_lag->setRange(0,1); w_lag->setValue(0.10);
+    QDoubleSpinBox *w_gap = new QDoubleSpinBox(); w_gap->setRange(0,1); w_gap->setValue(0.05);
+    QDoubleSpinBox *target_gap = new QDoubleSpinBox(); target_gap->setRange(0,10); target_gap->setDecimals(6); target_gap->setValue(0.01);
+    f->addRow("速度 w:", w_speed);
+    f->addRow("Ra w:", w_ra);
+    f->addRow("LAG w:", w_lag);
+    f->addRow("Gap w:", w_gap);
+    f->addRow("目标Gap:", target_gap);
+    btn_query = new QPushButton("查询/评分");
+    f->addRow(btn_query);
+    l_layout->addWidget(g_params);
+
+    QVBoxLayout *r_layout = new QVBoxLayout(right);
+    QGroupBox *g_table = new QGroupBox("结果表");
+    QVBoxLayout *vt = new QVBoxLayout(g_table);
+    table = new QTableWidget(0,4);
+    table->setHorizontalHeaderLabels({"id","CODE","CUTSPEED","RA"});
+    vt->addWidget(table);
+    r_layout->addWidget(g_table);
+
+    setCentralWidget(splitter);
+
+    connect(btn_query, &QPushButton::clicked, this, [=](){
+        double ws = w_speed->value(); double wr = w_ra->value(); double wl = w_lag->value(); double wg = w_gap->value(); double tg = target_gap->value();
+        auto rows = m_service->rankedCandidates(ws, wr, wl, wg, tg);
+        populateTable(rows);
+    });
+}
+
+void MainWindow::populateTable(const QList<CandidateRow>& rows) {
+    table->blockSignals(true);
+    table->setRowCount(0);
+    for (const auto &r: rows) {
+        int rw = table->rowCount(); table->insertRow(rw);
+        table->setItem(rw,0,new QTableWidgetItem(QString::number(r.id)));
+        table->setItem(rw,1,new QTableWidgetItem(r.code));
+        table->setItem(rw,2,new QTableWidgetItem(QString::number(r.fields.value("CUTSPEED").toDouble())));
+        table->setItem(rw,3,new QTableWidgetItem(QString::number(r.fields.value("RA").toDouble())));
+    }
+    table->blockSignals(false);
+}
+
+=== app/main.cpp ===
+#include <QApplication>
+#include "src/ui/mainwindow.h"
+
+int main(int argc, char *argv[]) {
+    QApplication a(argc, argv);
+    MainWindow w;
+    w.show();
+    return a.exec();
+}
+
+=== modules/dataprocess/dataprocess.h ===
+#ifndef DATAPROCESS_H
+#define DATAPROCESS_H
+
+#include <vector>
+
+namespace dp {
+    std::vector<double> normalize(const std::vector<double>& v);
+}
+
+#endif // DATAPROCESS_H
+
+=== modules/dataprocess/dataprocess.cpp ===
+#include "dataprocess.h"
+#include <algorithm>
+
+namespace dp {
+    std::vector<double> normalize(const std::vector<double>& v) {
+        if (v.empty()) return {};
+        double lo = *std::min_element(v.begin(), v.end());
+        double hi = *std::max_element(v.begin(), v.end());
+        std::vector<double> out; out.reserve(v.size());
+        for (double x: v) {
+            if (hi==lo) out.push_back(1.0);
+            else out.push_back((x-lo)/(hi-lo));
+        }
+        return out;
+    }
+}
+
+=== modules/dataprocess/dataprocess_c_api.cpp ===
+#include "dataprocess.h"
+#include <cstring>
+
+extern "C" {
+    // simple C wrapper: normalize input double array in-place
+    void dp_normalize(double* arr, int len) {
+        if (!arr || len<=0) return;
+        std::vector<double> v(arr, arr+len);
+        auto res = dp::normalize(v);
+        for (int i=0;i<len && i<(int)res.size();++i) arr[i] = res[i];
+    }
+}
+
+=== modules/recommend/recommend.h ===
+#ifndef RECOMMEND_H
+#define RECOMMEND_H
+
+#include <vector>
+#include <string>
+
+namespace rec {
+    // accept K rows of (id, score) and return top-k indices - here simplified
+    std::vector<int> rank_by_score(const std::vector<double>& scores, int topk);
+}
+
+#endif // RECOMMEND_H
+
+=== modules/recommend/recommend.cpp ===
+#include "recommend.h"
+#include <algorithm>
+
+namespace rec {
+    std::vector<int> rank_by_score(const std::vector<double>& scores, int topk) {
+        std::vector<int> idx(scores.size());
+        for (int i=0;i<(int)scores.size();++i) idx[i]=i;
+        std::stable_sort(idx.begin(), idx.end(), [&](int a,int b){ return scores[a]>scores[b]; });
+        if ((int)idx.size()>topk) idx.resize(topk);
+        return idx;
+    }
+}
+
+=== modules/recommend/recommend_c_api.cpp ===
+#include "recommend.h"
+#include <cstring>
+
+extern "C" {
+    // scores: input array, n: length, out_indices: preallocated int array, out_len: capacity
+    int rec_rank_topk(const double* scores, int n, int* out_indices, int out_len) {
+        if (!scores || n<=0 || !out_indices || out_len<=0) return 0;
+        std::vector<double> v(scores, scores+n);
+        auto idx = rec::rank_by_score(v, out_len);
+        int written = 0;
+        for (int i=0;i<(int)idx.size() && i<out_len;++i) {
+            out_indices[i] = idx[i];
+            ++written;
+        }
+        return written; // number of indices written
+    }
+}
+
+
+# End of code archive
