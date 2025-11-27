@@ -11,6 +11,7 @@
 #include <QGroupBox>
 #include <QtCharts/QChartView>
 #include <QtCharts/QScatterSeries>
+#include <QStackedWidget>
 
 using namespace QtCharts;
 
@@ -26,6 +27,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 private:
+    QStackedWidget *m_stack; // 用于管理页面切换
+    QPushButton *btn_return; // 新增：结果页面的返回按钮
+
     // ===== 核心初始化入口 =====
     void buildUI();
     void connectSignals();

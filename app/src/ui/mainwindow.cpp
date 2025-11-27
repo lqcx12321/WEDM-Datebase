@@ -28,25 +28,52 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
 void MainWindow::buildUI()
 {
-    QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+    // 1. 创建堆栈部件
+    m_stack = new QStackedWidget(this);
 
-    splitter->addWidget(createLeftPanel());
-    splitter->addWidget(createRightPanel());
-    splitter->setStretchFactor(1, 1);
+    // 2. 添加页面
+    // Index 0: 输入/查询页面 (原 LeftPanel)
+    m_stack->addWidget(createLeftPanel()); 
+    
+    // Index 1: 结果/图表页面 (原 RightPanel)
+    m_stack->addWidget(createRightPanel());
 
-    setCentralWidget(splitter);
+    // 3. 设置为主窗口中心部件
+    setCentralWidget(m_stack);
+    
+    // 默认显示第一页
+    m_stack->setCurrentIndex(0);
 }
 
 // 左侧 UI
+// 在 createLeftPanel 中
 QWidget* MainWindow::createLeftPanel()
 {
     QWidget *left = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(left);
+    
+    // 使用一个垂直布局
+    QVBoxLayout *mainLayout = new QVBoxLayout(left);
+    
+    // 这里可以加一个标题
+    QLabel *title = new QLabel("WEDM 智能化工艺参数查询系统");
+    title->setAlignment(Qt::AlignCenter);
+    title->setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;");
+    mainLayout->addWidget(title);
 
+    // 创建一个居中的容器，用来放原本的三个 GroupBox
+    QWidget *centerWidget = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(centerWidget);
+    
     layout->addWidget(createProcessFilterGroup());
     layout->addWidget(createTargetConstraintGroup());
     layout->addWidget(createWeightGroup());
+    
+    // 稍微控制一下最大宽度，防止在大屏幕上输入框拉得太长
+    centerWidget->setMaximumWidth(800); 
 
+    // 将居中容器添加到主布局，并居中显示
+    mainLayout->addWidget(centerWidget, 0, Qt::AlignHCenter);
+    
     return left;
 }
 
@@ -155,6 +182,17 @@ QWidget* MainWindow::createRightPanel()
     QWidget *right = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(right);
 
+    // --- 新增：顶部工具栏（包含返回按钮） ---
+    QHBoxLayout *topBar = new QHBoxLayout();
+    btn_return = new QPushButton("<< 返回查询 / 重置");
+    // 可以设置个图标或者样式让它显眼一点
+    btn_return->setStyleSheet("font-weight: bold; font-size: 14px; height: 30px;");
+    
+    topBar->addWidget(btn_return);
+    topBar->addStretch(); // 弹簧，把按钮顶在左边
+    layout->addLayout(topBar);
+    // ------------------------------------
+
     layout->addWidget(createPlotGroup());
     layout->addWidget(createTableGroup());
 
@@ -195,7 +233,9 @@ QGroupBox* MainWindow::createTableGroup()
 // 信号槽区域，推荐代码入口
 void MainWindow::connectSignals()
 {
+    // --- 查询按钮逻辑 ---
     connect(btn_query, &QPushButton::clicked, this, [=](){
+        // 1. 执行原有的查询逻辑
         double ws = w_speed->value();
         double wr = w_ra->value();
         double wl = w_lag->value();
@@ -204,25 +244,43 @@ void MainWindow::connectSignals()
 
         auto rows = m_service->rankedCandidates(ws, wr, wl, wg, tg);
         populateTable(rows);
+        
+        // 2. 自动更新图表（因为页面切换后可能需要刷新显示）
+        updatePlot();
+
+        // 3. 【关键修改】跳转到结果页面 (Index 1)
+        m_stack->setCurrentIndex(1);
     });
 
-    connect (btn_reset, &QPushButton::clicked, this, &MainWindow::resetFilters);
+    // --- 原有的左侧重置按钮 (仅清空输入框) ---
+    connect(btn_reset, &QPushButton::clicked, this, &MainWindow::resetFilters);
     
-    connect (btn_export, &QPushButton::clicked, this, &MainWindow::exportCSV);
+    // --- 导出 CSV ---
+    connect(btn_export, &QPushButton::clicked, this, &MainWindow::exportCSV);
 
+    // --- 图表下拉框切换 ---
     connect(plot_select, &QComboBox::currentTextChanged, this, [=](){
         updatePlot();
     });
 
+    // --- 重熔层筛选 ---
     connect(btn_recast, &QPushButton::clicked, this, [=](){
-    RecastDialog dlg(this);
-    dlg.exec();
-
-    qDebug() << "Recast filter enabled =" << recast_enabled
-             << ", limit =" << recast_limit;
+        RecastDialog dlg(this);
+        dlg.exec();
+        qDebug() << "Recast filter enabled"; 
     });
 
-
+    // --- 【新增】结果页面的返回按钮逻辑 ---
+    connect(btn_return, &QPushButton::clicked, this, [=](){
+        // 1. 跳转回输入页面 (Index 0)
+        m_stack->setCurrentIndex(0);
+        
+        // 2. (可选) 如果你希望点击返回时同时也“重置”所有条件，取消下面这行的注释
+        // resetFilters(); 
+        
+        // 3. (可选) 清空结果表，避免下次查询前看到旧数据
+        // table->setRowCount(0); 
+    });
 }
 
 // 填充表格
