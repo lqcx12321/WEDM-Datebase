@@ -21,12 +21,14 @@ set(SOURCES
     src/ui/mainwindow.cpp
     src/dao/db.cpp
     src/service/selectionservice.cpp
+    src/service/recastdialog.cpp
 )
 
 set(HEADERS
     src/ui/mainwindow.h
     src/dao/db.h
     src/service/selectionservice.h
+    src/service/recastdialog.h
     src/model/types.h
 )
 

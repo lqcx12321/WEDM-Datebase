@@ -16,6 +16,7 @@ using namespace QtCharts;
 
 #include "../dao/db.h"
 #include "../service/selectionservice.h"
+#include "../service/recastdialog.h"
 
 class MainWindow : public QMainWindow
 {
@@ -44,6 +45,13 @@ private:
 
     QChartView *chartView;
 
+    // 重熔层按钮
+    QPushButton *btn_recast;
+
+    // 重熔层阈值（从对话框返回后保存）
+    double recast_limit = 0.0;
+    bool recast_enabled = false;
+
     // 表格填充
     void populateTable(const QList<CandidateRow>& rows);
 
@@ -71,8 +79,8 @@ private:
     QDoubleSpinBox *sp_ws;
     QDoubleSpinBox *sp_wt;
 
-    QLineEdit *cb_wmat;
-    QLineEdit *cb_dmat;
+    QComboBox *cb_wmat;
+    QComboBox *cb_dmat;
 
     QDoubleSpinBox *sp_wthick_min;
     QDoubleSpinBox *sp_wthick_max;

@@ -11,6 +11,7 @@
 #include <QDebug>
 #include <QFileDialog>
 #include <QTextStream>
+// #include <../service/recastdialog.h>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
@@ -65,8 +66,10 @@ QGroupBox* MainWindow::createProcessFilterGroup()
     sp_ws  = new QDoubleSpinBox(); sp_ws->setRange(0, 20);  sp_ws->setDecimals(3);
     sp_wt  = new QDoubleSpinBox(); sp_wt->setRange(0, 5000); sp_wt->setDecimals(1);
 
-    cb_wmat = new QLineEdit();
-    cb_dmat = new QLineEdit();
+    cb_wmat = new QComboBox();
+    cb_wmat->addItems({"SKD11", "Cr12", "45#", "304", "铜", "黄铜", "钛合金"});
+    cb_dmat = new QComboBox();
+    cb_dmat->addItems({"钼丝", "黄铜丝", "镀层丝"});   // 示例
     sp_wthick_min = new QDoubleSpinBox(); sp_wthick_min->setRange(0, 1000);
     sp_wthick_max = new QDoubleSpinBox(); sp_wthick_max->setRange(0, 1000);
     sp_ddia_min   = new QDoubleSpinBox(); sp_ddia_min->setRange(0, 2);
@@ -96,6 +99,8 @@ QGroupBox* MainWindow::createProcessFilterGroup()
     btn_layout->addWidget(btn_query);
     btn_layout->addWidget(btn_reset);
     btn_layout->addWidget(btn_export);
+    btn_recast = new QPushButton("重熔层筛选");  // 新增按钮
+    btn_layout->addWidget(btn_recast);
 
     f->addRow(btn_layout);
 
@@ -209,6 +214,15 @@ void MainWindow::connectSignals()
         updatePlot();
     });
 
+    connect(btn_recast, &QPushButton::clicked, this, [=](){
+    RecastDialog dlg(this);
+    dlg.exec();
+
+    qDebug() << "Recast filter enabled =" << recast_enabled
+             << ", limit =" << recast_limit;
+    });
+
+
 }
 
 // 填充表格
@@ -248,8 +262,8 @@ void MainWindow::resetFilters()
     sp_sv->clear();
     sp_ws->clear();
     sp_wt->clear();
-    cb_wmat->clear();
-    cb_dmat->clear();
+    // cb_wmat->clear();
+    // cb_dmat->clear();
     sp_wthick_min->setValue(0);
     sp_wthick_max->setValue(0);
     sp_ddia_min->setValue(0);
@@ -259,6 +273,8 @@ void MainWindow::resetFilters()
     sp_gap_min->setValue(0);
     sp_gap_max->setValue(0);
     sp_max_lag->setValue(0);
+    table->setRowCount(0);
+
 
     qDebug() << "Filters have been reset.";
 }
