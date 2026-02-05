@@ -99,9 +99,13 @@ QGroupBox* MainWindow::createProcessFilterGroup()
     btn_layout->addWidget(btn_query);
     btn_layout->addWidget(btn_reset);
     btn_layout->addWidget(btn_export);
-    btn_recast = new QPushButton("重熔层筛选");  // 新增按钮
+    btn_recast = new QPushButton("重熔层筛选");
     btn_layout->addWidget(btn_recast);
-
+    btnViewDb = new QPushButton("查看数据库");
+    btn_layout->addWidget(btnViewDb);
+    // btnViewDb = new QPushButton("查看和修改数据库数据", this);
+    // btnViewDb->setGeometry(20, 20, 220, 40); // 调整位置和大小
+    // connect(btnViewDb, &QPushButton::clicked, this, &MainWindow::openDbViewer);
     f->addRow(btn_layout);
 
     return g;
@@ -215,14 +219,14 @@ void MainWindow::connectSignals()
     });
 
     connect(btn_recast, &QPushButton::clicked, this, [=](){
-    RecastDialog dlg(this);
+    RecastDialog dlg(nullptr); // 顶级窗口，允许在桌面上自由拖动
+    dlg.setAttribute(Qt::WA_DeleteOnClose);
     dlg.exec();
-
     qDebug() << "Recast filter enabled =" << recast_enabled
              << ", limit =" << recast_limit;
     });
 
-
+    connect(btnViewDb, &QPushButton::clicked, this, &MainWindow::openDbViewer);
 }
 
 // 填充表格
@@ -317,6 +321,7 @@ void MainWindow::exportCSV()
     qDebug() << "CSV 导出成功:" << fileName;
 }
 
+// 表格刷新区域
 void MainWindow::updatePlot()
 {
     if (table->rowCount() == 0)
@@ -359,6 +364,20 @@ void MainWindow::updatePlot()
     chartView->setChart(chart);
 }
 
+// 数据库查看按钮槽
+void MainWindow::openDbViewer()
+{
+    // 如果已经打开，则置于最前并激活
+    if (m_dbViewer) {
+        m_dbViewer->raise();
+        m_dbViewer->activateWindow();
+        return;
+    }
 
-
+    // 创建并显示窗口（作为顶级窗口），关闭时自动删除并通知主窗口
+    m_dbViewer = new DbViewer(nullptr); // 顶级窗口，允许在桌面上自由拖动
+    m_dbViewer->setAttribute(Qt::WA_DeleteOnClose);
+    m_dbViewer->show();
+    connect(m_dbViewer, &QObject::destroyed, this, [this]() { m_dbViewer = nullptr; });
+}
 

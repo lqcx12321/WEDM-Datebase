@@ -21,15 +21,17 @@ set(SOURCES
     src/ui/mainwindow.cpp
     src/dao/db.cpp
     src/service/selectionservice.cpp
-    src/service/recastdialog.cpp
+    src/ui/recastdialog.cpp
+    src/ui/dbviewer.cpp
 )
 
 set(HEADERS
     src/ui/mainwindow.h
     src/dao/db.h
     src/service/selectionservice.h
-    src/service/recastdialog.h
+    src/ui/recastdialog.h
     src/model/types.h
+    src/ui/dbviewer.h
 )
 
 qt5_add_resources(RESOURCES)

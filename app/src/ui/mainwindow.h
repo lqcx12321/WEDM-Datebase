@@ -16,7 +16,8 @@ using namespace QtCharts;
 
 #include "../dao/db.h"
 #include "../service/selectionservice.h"
-#include "../service/recastdialog.h"
+#include "../ui/recastdialog.h"
+#include "../ui/dbviewer.h"
 
 class MainWindow : public QMainWindow
 {
@@ -61,12 +62,14 @@ private:
 
     void updatePlot();
 
-
+    void openDbViewer();
 
 private:
     // ========= 数据库 & 服务 =========
     DB *m_db;
     SelectionService *m_service;
+    // 当前打开的数据库查看窗口（若有）
+    DbViewer *m_dbViewer = nullptr;
 
     // ========= 左侧控件：工艺筛选 =========
     QLineEdit *ed_code;
@@ -90,6 +93,7 @@ private:
     QPushButton *btn_query;
     QPushButton *btn_reset;
     QPushButton *btn_export;
+    QPushButton *btnViewDb;
 
     // ========= 左侧控件：硬约束 =========
     QDoubleSpinBox *sp_max_ra;

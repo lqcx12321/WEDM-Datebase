@@ -6,6 +6,10 @@ RecastDialog::RecastDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle("重熔层筛选设置");
+    // 使对话框成为顶级窗口（系统标题栏，可自由拖动）
+    setWindowFlags(windowFlags() | Qt::Window);
+    // 关闭时自动删除（对 new 创建的窗口有用，安全无副作用）
+    setAttribute(Qt::WA_DeleteOnClose);
 
     // ---- 启用筛选 ----
     cb_enable = new QCheckBox("启用重熔层筛选");
